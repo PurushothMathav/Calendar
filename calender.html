@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Calendar Widget with Monthly Events</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .calendar-container {
+            display: flex;
+            gap: 20px;
+        }
+        .calendar {
+            width: 90%;
+            max-width: 400px;
+            border: 1px solid #ccc;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            background-color: #fff;
+        }
+        .events {
+            width: 300px;
+            border: 1px solid #ccc;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            background-color: #fff;
+        }
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .calendar-days {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .calendar-days div {
+            flex: 1;
+            text-align: center;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 10px;
+        }
+        .calendar-date {
+            padding: 10px;
+            text-align: center;
+            border: 1px solid #ccc;
+            cursor: pointer;
+            position: relative;
+        }
+        .calendar-date:hover {
+            background-color: #f0f0f0;
+        }
+        .popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            background-color: #fff;
+            z-index: 1000;
+        }
+        .popup input, .popup textarea, .popup button {
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .popup button {
+            cursor: pointer;
+        }
+        .popup-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+        .event-list {
+            padding: 0;
+            margin: 0;
+            list-style: none;
+        }
+        .event-list li {
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .event-list button {
+            margin-left: 10px;
+            padding: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="calendar-container">
+        <div class="calendar">
+            <div class="calendar-header">
+                <button id="prevMonth">&lt;</button>
+                <h3 id="monthYear"></h3>
+                <button id="nextMonth">&gt;</button>
+            </div>
+            <div class="calendar-controls">
+                <select id="yearSelect"></select>
+                <select id="monthSelect">
+                    <option value="0">January</option>
+                    <option value="1">February</option>
+                    <option value="2">March</option>
+                    <option value="3">April</option>
+                    <option value="4">May</option>
+                    <option value="5">June</option>
+                    <option value="6">July</option>
+                    <option value="7">August</option>
+                    <option value="8">September</option>
+                    <option value="9">October</option>
+                    <option value="10">November</option>
+                    <option value="11">December</option>
+                </select>
+            </div>
+            <div class="calendar-days">
+                <div>Sun</div>
+                <div>Mon</div>
+                <div>Tue</div>
+                <div>Wed</div>
+                <div>Thu</div>
+                <div>Fri</div>
+                <div>Sat</div>
+            </div>
+            <div class="calendar-grid" id="calendarDates"></div>
+        </div>
+        <div class="events">
+            <h3>Events of the Month</h3>
+            <ul class="event-list" id="eventList"></ul>
+        </div>
+    </div>
+    <div class="popup-overlay" id="popupOverlay"></div>
+    <div class="popup" id="popup">
+        <input type="text" id="eventTitle" placeholder="Event Title">
+        <textarea id="eventNotes" placeholder="Event Notes"></textarea>
+        <button id="saveEvent">Save Event</button>
+    </div>
+
+<script>
+    const calendarDates = document.getElementById('calendarDates');
+    const monthYear = document.getElementById('monthYear');
+    const prevMonth = document.getElementById('prevMonth');
+    const nextMonth = document.getElementById('nextMonth');
+    const yearSelect = document.getElementById('yearSelect');
+    const monthSelect = document.getElementById('monthSelect');
+    const popupOverlay = document.getElementById('popupOverlay');
+    const popup = document.getElementById('popup');
+    const eventTitle = document.getElementById('eventTitle');
+    const eventNotes = document.getElementById('eventNotes');
+    const saveEvent = document.getElementById('saveEvent');
+    const eventList = document.getElementById('eventList');
+    
+    let currentDate = new Date();
+    let selectedDate = null;
+    let events = {};
+    let editMode = false;
+    let editIndex = -1;
+    
+    const monthNames = [
+        'January', 'February', 'March', 'April', 'May', 'June', 
+        'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    
+    function populateCalendar() {
+        calendarDates.innerHTML = '';
+        const month = currentDate.getMonth();
+        const year = currentDate.getFullYear();
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        
+        monthYear.textContent = `${monthNames[month]} ${year}`;
+        
+        for (let i = 0; i < firstDay; i++) {
+            const emptyCell = document.createElement('div');
+            calendarDates.appendChild(emptyCell);
+        }
+        
+        for (let i = 1; i <= daysInMonth; i++) {
+            const dateCell = document.createElement('div');
+            dateCell.textContent = i;
+            dateCell.className = 'calendar-date';
+            dateCell.addEventListener('click', () => {
+                selectedDate = new Date(year, month, i);
+                openPopup();
+            });
+            calendarDates.appendChild(dateCell);
+        }
+        
+        displayMonthlyEvents();
+    }
+    
+    function displayMonthlyEvents() {
+        const month = currentDate.getMonth();
+        const year = currentDate.getFullYear();
+        eventList.innerHTML = '';
+        
+        for (const date in events) {
+            const [eventYear, eventMonth, eventDay] = date.split('-').map(Number);
+            if (eventYear === year && eventMonth === month) {
+                events[date].forEach((event, index) => {
+                    const eventItem = document.createElement('li');
+                    eventItem.textContent = `${eventDay}: ${event.title} - ${event.notes}`;
+                    const deleteButton = document.createElement('button');
+                    deleteButton.textContent = 'Delete';
+                    deleteButton.addEventListener('click', () => {
+                        events[date].splice(index, 1);
+                        if (events[date].length === 0) {
+                            delete events[date];
+                        }
+                        localStorage.setItem('events', JSON.stringify(events));
+                        displayMonthlyEvents();
+                    });
+                    eventItem.appendChild(deleteButton);
+                    eventItem.addEventListener('click', () => {
+                        editMode = true;
+                        editIndex = index;
+                        selectedDate = new Date(eventYear, eventMonth, eventDay);
+                        openPopup();
+                        eventTitle.value = event.title;
+                        eventNotes.value = event.notes;
+                    });
+                    eventList.appendChild(eventItem);
+                });
+            }
+        }
+    }
+    
+    function openPopup() {
+        popupOverlay.style.display = 'block';
+        popup.style.display = 'block';
+    }
+    
+    function closePopup() {
+        popupOverlay.style.display = 'none';
+        popup.style.display = 'none';
+        eventTitle.value = '';
+        eventNotes.value = '';
+        editMode = false;
+        editIndex = -1;
+    }
+saveEvent.addEventListener('click', () => {
+    const title = eventTitle.value;
+    const notes = eventNotes.value;
+    if (title && notes && selectedDate) {
+        const eventDate = `${selectedDate.getFullYear()}-${selectedDate.getMonth()}-${selectedDate.getDate()}`;
+        if (!events[eventDate]) {
+            events[eventDate] = [];
+        }
+        if (editMode && editIndex !== -1) {
+            events[eventDate][editIndex] = { title, notes };
+        } else {
+            events[eventDate].push({ title, notes });
+        }
+        
+        // Save events to localStorage
+        localStorage.setItem('events', JSON.stringify(events));
+        
+        populateCalendar();
+        closePopup();
+    }
+});
+
+// Load events from localStorage
+const storedEvents = localStorage.getItem('events');
+if (storedEvents) {
+    events = JSON.parse(storedEvents);
+    populateCalendar();
+}
+
+popupOverlay.addEventListener('click', closePopup);
+
+prevMonth.addEventListener('click', () => {
+    currentDate.setMonth(currentDate.getMonth() - 1);
+    populateCalendar();
+});
+
+nextMonth.addEventListener('click', () => {
+    currentDate.setMonth(currentDate.getMonth() + 1);
+    populateCalendar();
+});
+
+yearSelect.addEventListener('change', (e) => {
+    currentDate.setFullYear(e.target.value);
+    populateCalendar();
+});
+
+monthSelect.addEventListener('change', (e) => {
+    currentDate.setMonth(e.target.value);
+    populateCalendar();
+});
+
+function updateYearMonthSelect() {
+    const currentYear = currentDate.getFullYear();
+    const startYear = currentYear - 10;
+    const endYear = currentYear + 10;
+    
+    yearSelect.innerHTML = '';
+    for (let year = startYear; year <= endYear; year++) {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        if (year === currentYear) {
+            option.selected = true;
+        }
+        yearSelect.appendChild(option);
+    }
+    
+    monthSelect.value = currentDate.getMonth();
+}
+
+updateYearMonthSelect();
+populateCalendar();
+</script>
+
+
+</body>
+</html>
